@@ -35,3 +35,5 @@ export const SOTIK_AVITO_REVIEWS_HREF =
 export const CART_STORAGE_KEY = IS_SOTIK_BRAND ? "sotik77-cart-v1" : "xstore-cart-v1";
 
 export const SLIDER_PHOTO_ALT_FALLBACK = IS_SOTIK_BRAND ? "Фото SOTIK77" : "Фото X:STORE";
+
+export const YANDEX_METRIKA_COUNTER_ID = 109598636;
