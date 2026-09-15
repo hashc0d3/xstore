@@ -44,6 +44,30 @@ body {
   box-shadow: 0 4px 10px rgba(239, 68, 68, 0.28);
 }
 
+.price-info-tip {
+  filter: drop-shadow(0 10px 22px rgba(24, 24, 27, 0.14));
+}
+
+.price-info-tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  width: 10px;
+  height: 10px;
+  background: #ececee;
+  transform: rotate(45deg) translateY(-4px);
+  border-radius: 1px;
+}
+
+.price-info-tip[data-side="start"]::after {
+  left: 12px;
+}
+
+.price-info-tip[data-side="end"]::after {
+  right: 12px;
+  left: auto;
+}
+
 .liquid-glass {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.38));
   border: 1px solid rgba(255, 255, 255, 0.58);
