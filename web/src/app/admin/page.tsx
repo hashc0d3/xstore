@@ -1203,24 +1203,35 @@ export default function AdminPage() {
                       ) : null}
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <input
-                        className="field"
-                        type="number"
-                        min={0}
-                        step={1}
-                        placeholder="Цена варианта"
-                        value={variant.price}
-                        onChange={(e) => updateVariantRow(index, { price: e.target.value })}
-                      />
-                      <input
-                        className="field"
-                        type="number"
-                        min={1}
-                        step={1}
-                        placeholder="Старая цена (необязательно)"
-                        value={variant.compareAtPrice}
-                        onChange={(e) => updateVariantRow(index, { compareAtPrice: e.target.value })}
-                      />
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-600">
+                          Цена варианта <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          className="field"
+                          type="number"
+                          min={0}
+                          step={1}
+                          required
+                          placeholder="Цена варианта *"
+                          value={variant.price}
+                          onChange={(e) => updateVariantRow(index, { price: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-500">
+                          Старая цена
+                        </label>
+                        <input
+                          className="field"
+                          type="number"
+                          min={1}
+                          step={1}
+                          placeholder="Старая цена (необязательно)"
+                          value={variant.compareAtPrice}
+                          onChange={(e) => updateVariantRow(index, { compareAtPrice: e.target.value })}
+                        />
+                      </div>
                     </div>
                     <div className="flex justify-end">
                       <button
