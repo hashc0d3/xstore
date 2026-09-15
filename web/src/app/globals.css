@@ -39,6 +39,11 @@ body {
   filter: brightness(1.05);
 }
 
+.sale-badge {
+  background: linear-gradient(90deg, #ff2d2d 0%, #ef4444 100%);
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.28);
+}
+
 .liquid-glass {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.38));
   border: 1px solid rgba(255, 255, 255, 0.58);

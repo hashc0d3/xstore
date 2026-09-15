@@ -1,5 +1,12 @@
-import { Type } from "class-transformer";
+import { Type, Transform } from "class-transformer";
 import { IsArray, IsInt, IsObject, IsOptional, IsString, Min, ValidateNested } from "class-validator";
+
+function emptyToUndefined({ value }: { value: unknown }) {
+  if (value === "" || value === null || value === undefined) return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.round(n);
+}
 
 class ProductVariantDto {
   @IsOptional()
@@ -25,6 +32,12 @@ class ProductVariantDto {
   @IsInt()
   @Min(0)
   price!: number;
+
+  @IsOptional()
+  @Transform(emptyToUndefined, { toClassOnly: true })
+  @IsInt()
+  @Min(1)
+  compareAtPrice?: number;
 
   @IsOptional()
   @IsString()
@@ -58,6 +71,12 @@ export class UpsertProductDto {
   @IsInt()
   @Min(0)
   basePrice!: number;
+
+  @IsOptional()
+  @Transform(emptyToUndefined, { toClassOnly: true })
+  @IsInt()
+  @Min(1)
+  compareAtPrice?: number;
 
   @IsOptional()
   @IsObject()

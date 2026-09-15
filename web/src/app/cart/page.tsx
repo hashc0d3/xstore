@@ -365,10 +365,23 @@ export default function CartPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-lg font-semibold text-zinc-900 min-[640px]:text-xl">{item.name}</p>
                         {item.color ? <p className="text-sm text-zinc-600">Цвет: {item.color}</p> : null}
-                        {item.screen ? <p className="text-sm text-zinc-600">Диагональ: {item.screen}</p> : null}
+                        {item.screen ? (
+                          <p className="text-sm text-zinc-600">
+                            {/\d+\s*mm/i.test(item.screen) ? "Размер корпуса" : "Диагональ"}: {item.screen}
+                          </p>
+                        ) : null}
                         {item.memory ? <p className="text-sm text-zinc-600">Память: {item.memory}</p> : null}
                         {item.ram ? <p className="text-sm text-zinc-600">Оперативная память: {item.ram}</p> : null}
-                        {item.simType ? <p className="text-sm text-zinc-600">SIM-карта: {item.simType}</p> : null}
+                        {item.simType ? (
+                          <p className="text-sm text-zinc-600">
+                            {/wi-?fi/i.test(item.simType)
+                              ? "Связь"
+                              : /sim/i.test(item.simType)
+                                ? "SIM-карта"
+                                : "Ремешок"}
+                            : {item.simType}
+                          </p>
+                        ) : null}
                         <div className="mt-2 inline-flex items-center gap-2">
                           <button
                             type="button"

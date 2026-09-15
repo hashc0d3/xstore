@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { CategoryStripSkeleton, ProductGridSkeleton } from "@/components/catalog-skeleton";
+import { ProductPrice } from "@/components/product-price";
 import { createLead, fetchStoreData } from "@/lib/api";
 import {
   CART_STORAGE_KEY,
@@ -20,7 +21,7 @@ import {
   SOTIK_TELEGRAM_HREF,
   VK_HREF
 } from "@/lib/brand";
-import { Category, Product, ProductVariant, StoreData, defaultStoreData, toRub } from "@/lib/store";
+import { Category, Product, ProductVariant, StoreData, defaultStoreData, resolveCompareAtPrice } from "@/lib/store";
 
 const IPHONE_LIKE_SLUGS = new Set(["iphone", "iphone-used"]);
 const MACBOOK_LIKE_SLUGS = new Set(["macbook"]);
@@ -431,6 +432,7 @@ function ProductCard({
   ]);
 
   const shownPrice = activeVariant?.price ?? product.basePrice;
+  const shownCompareAt = resolveCompareAtPrice(shownPrice, activeVariant, product);
   const stockBadge = availabilityBadgeText(
     activeVariant?.availability,
     activeVariant ? activeVariant.price : product.basePrice
@@ -682,9 +684,12 @@ function ProductCard({
           {stockBadge ? (
             <p className="text-[11px] font-semibold text-amber-800 min-[640px]:text-xs">{stockBadge}</p>
           ) : null}
-          <p className="text-base font-bold text-zinc-900 min-[480px]:text-lg min-[960px]:text-xl">
-            {shownPrice > 0 ? `от ${toRub(shownPrice)}` : stockBadge === "Скоро в продаже" ? "Скоро в продаже" : "Цена по запросу"}
-          </p>
+          <ProductPrice
+            price={shownPrice}
+            compareAtPrice={shownCompareAt}
+            unavailableText={stockBadge === "Скоро в продаже" ? "Скоро в продаже" : "Цена по запросу"}
+            size="card"
+          />
           <button
             type="button"
             onClick={(e) => {
@@ -1464,6 +1469,7 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
         : null;
 
       const shownModalPrice = activeVariant?.price ?? selectedProduct.basePrice;
+      const shownModalCompareAt = resolveCompareAtPrice(shownModalPrice, activeVariant, selectedProduct);
       const shownModalImage = activeVariant?.imageUrl ?? selectedProduct.imageUrl;
       const modalStockBadge = availabilityBadgeText(
         activeVariant?.availability,
@@ -1613,14 +1619,17 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
                 {modalStockBadge ? (
                   <p className="mt-1 text-[11px] font-semibold text-amber-800 min-[640px]:text-xs">{modalStockBadge}</p>
                 ) : null}
-                <p className="mt-1 font-semibold text-zinc-900">
-                  Цена:{" "}
-                  {shownModalPrice > 0
-                    ? `от ${toRub(shownModalPrice)}`
-                    : modalStockBadge === "Скоро в продаже"
-                      ? "скоро в продаже"
-                      : "по запросу"}
-                </p>
+                <div className="mt-1">
+                  <ProductPrice
+                    price={shownModalPrice}
+                    compareAtPrice={shownModalCompareAt}
+                    label="Цена: "
+                    unavailableText={
+                      modalStockBadge === "Скоро в продаже" ? "скоро в продаже" : "по запросу"
+                    }
+                    size="modal"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-2 min-[640px]:grid-cols-2">
                 <button

@@ -14,6 +14,8 @@ export type Product = {
   color?: string;
   description?: string;
   basePrice: number;
+  /** Старая цена (перечёркнутая). Необязательная. */
+  compareAtPrice?: number;
   memoryPrices?: Record<string, number>;
   variants?: ProductVariant[];
   imageUrl: string;
@@ -26,6 +28,7 @@ export type ProductVariant = {
   screen?: string;
   ram?: string;
   price: number;
+  compareAtPrice?: number;
   imageUrl?: string;
   /** in_stock | coming_soon | out_of_stock | unknown */
   availability?: string;
@@ -75,6 +78,7 @@ export const defaultStoreData: StoreData = {
       description:
         "Флагман с титановым корпусом, продвинутой камерой и высокой производительностью для фото, видео и повседневных задач.",
       basePrice: 109990,
+      compareAtPrice: 129990,
       memoryPrices: {
         "256 ГБ": 109990,
         "512 ГБ": 124990,
@@ -90,6 +94,7 @@ export const defaultStoreData: StoreData = {
       description:
         "Мощный смартфон с ярким дисплеем, отличной автономностью и сбалансированными характеристиками для работы и развлечений.",
       basePrice: 91990,
+      compareAtPrice: 109990,
       memoryPrices: {
         "256 ГБ": 91990,
         "512 ГБ": 102990,
@@ -135,6 +140,7 @@ export const defaultStoreData: StoreData = {
       description:
         "Беспроводные наушники с активным шумоподавлением, прозрачным режимом и удобной интеграцией с устройствами Apple.",
       basePrice: 24990,
+      compareAtPrice: 29990,
       imageUrl: "https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=80"
     },
     {
@@ -206,6 +212,7 @@ function normalizeStoreData(input: StoreData): StoreData {
             screen: typeof candidate.screen === "string" ? candidate.screen.trim() || undefined : undefined,
             ram: typeof candidate.ram === "string" ? candidate.ram.trim() || undefined : undefined,
             price,
+            compareAtPrice: parseOptionalCompareAt(candidate.compareAtPrice),
             imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() || undefined : undefined,
             availability:
               typeof candidate.availability === "string" && candidate.availability.trim()
@@ -237,6 +244,7 @@ function normalizeStoreData(input: StoreData): StoreData {
       color: typeof raw.color === "string" ? raw.color.trim() : undefined,
       description: typeof raw.description === "string" ? raw.description.trim() : undefined,
       basePrice: Number.isFinite(basePrice) ? basePrice : 0,
+      compareAtPrice: parseOptionalCompareAt((raw as Product).compareAtPrice),
       memoryPrices: Object.keys(normalizedMemoryPrices).length ? normalizedMemoryPrices : undefined,
       variants: normalizedVariants.length ? normalizedVariants : undefined,
       imageUrl: raw.imageUrl
@@ -296,4 +304,29 @@ export function saveStoreData(data: StoreData): void {
 
 export function toRub(price: number): string {
   return new Intl.NumberFormat("ru-RU").format(price) + " ₽";
+}
+
+export function parseOptionalCompareAt(value: unknown): number | undefined {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.round(n);
+}
+
+/** Скидка в целых процентах: (старая − текущая) / старая. */
+export function priceDiscountPercent(price: number, compareAtPrice?: number): number | null {
+  if (!compareAtPrice || compareAtPrice <= 0 || price <= 0 || compareAtPrice <= price) {
+    return null;
+  }
+  const percent = Math.round(((compareAtPrice - price) / compareAtPrice) * 100);
+  return percent > 0 ? percent : null;
+}
+
+export function resolveCompareAtPrice(
+  price: number,
+  variant?: Pick<ProductVariant, "compareAtPrice"> | null,
+  product?: Pick<Product, "compareAtPrice">
+): number | undefined {
+  const raw = parseOptionalCompareAt(variant?.compareAtPrice ?? product?.compareAtPrice);
+  if (!raw || raw <= price) return undefined;
+  return raw;
 }

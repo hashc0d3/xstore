@@ -22,6 +22,7 @@ type StoreProduct = {
   color?: string;
   description?: string;
   basePrice: number;
+  compareAtPrice?: number;
   memoryPrices?: Record<string, number>;
   variants?: Array<{
     color?: string;
@@ -30,6 +31,7 @@ type StoreProduct = {
     screen?: string;
     ram?: string;
     price: number;
+    compareAtPrice?: number;
     imageUrl?: string;
     availability?: string;
   }>;
@@ -55,6 +57,11 @@ export class StoreService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ensureSeedData() {
+    try {
+      await this.ensureProductCompareAtPriceColumn();
+    } catch {
+      // Колонка уже есть или БД ещё поднимается — migrate deploy добавит её отдельно.
+    }
     try {
       await this.ensureSliderPhotoTable();
     } catch {
@@ -206,6 +213,7 @@ export class StoreService {
       color: dto.color?.trim() || null,
       description: dto.description?.trim() || null,
       basePrice: Number(dto.basePrice),
+      compareAtPrice: this.resolveProductCompareAtPrice(dto) ?? null,
       memoryPrices: this.normalizePricingPayload(dto.memoryPrices, dto.variants) as Prisma.InputJsonValue,
       imageUrl:
         dto.imageUrl?.trim() || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80"
@@ -299,6 +307,7 @@ export class StoreService {
       color: item.color ?? undefined,
       description: item.description ?? undefined,
       basePrice: item.basePrice,
+      compareAtPrice: this.parseOptionalPrice((item as Product & { compareAtPrice?: number | null }).compareAtPrice) ?? undefined,
       memoryPrices: Object.keys(memoryPrices).length ? memoryPrices : undefined,
       variants: variants.length ? variants : undefined,
       imageUrl: item.imageUrl
@@ -348,6 +357,14 @@ export class StoreService {
       return await this.getSliderPhotos();
     } catch {
       return [];
+    }
+  }
+
+  private async ensureProductCompareAtPriceColumn(): Promise<void> {
+    try {
+      await this.prisma.$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN "compareAtPrice" INTEGER`);
+    } catch {
+      // Колонка уже есть (после prisma migrate deploy) — существующие товары не трогаем.
     }
   }
 
@@ -402,6 +419,21 @@ export class StoreService {
     return map;
   }
 
+  private parseOptionalPrice(value: unknown): number | undefined {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    return Math.round(n);
+  }
+
+  private resolveProductCompareAtPrice(dto: UpsertProductDto): number | undefined {
+    const fromDto = this.parseOptionalPrice(dto.compareAtPrice);
+    if (fromDto) return fromDto;
+    const variants = this.normalizeVariants(dto.variants);
+    if (!variants.length) return undefined;
+    const cheapest = variants.reduce((acc, item) => (item.price <= acc.price ? item : acc));
+    return this.parseOptionalPrice(cheapest.compareAtPrice) ?? variants.find((item) => item.compareAtPrice)?.compareAtPrice;
+  }
+
   private normalizeVariants(
     input?: Array<{
       color?: string;
@@ -410,6 +442,7 @@ export class StoreService {
       screen?: string;
       ram?: string;
       price: number;
+      compareAtPrice?: number;
       imageUrl?: string;
       availability?: string;
     }>
@@ -421,6 +454,7 @@ export class StoreService {
       screen?: string;
       ram?: string;
       price: number;
+      compareAtPrice?: number;
       imageUrl?: string;
       availability?: string;
     }> = [];
@@ -429,6 +463,7 @@ export class StoreService {
       const price = Number(item.price);
       if (!Number.isFinite(price)) continue;
       const av = item.availability?.trim().toLowerCase();
+      const compareAtPrice = this.parseOptionalPrice(item.compareAtPrice);
       normalized.push({
         color: item.color?.trim() || undefined,
         memory: item.memory?.trim() || undefined,
@@ -436,6 +471,7 @@ export class StoreService {
         screen: item.screen?.trim() || undefined,
         ram: item.ram?.trim() || undefined,
         price,
+        ...(compareAtPrice ? { compareAtPrice } : {}),
         imageUrl: item.imageUrl?.trim() || undefined,
         availability:
           av && ["in_stock", "coming_soon", "out_of_stock", "unknown"].includes(av) ? av : undefined
@@ -453,6 +489,7 @@ export class StoreService {
       screen?: string;
       ram?: string;
       price: number;
+      compareAtPrice?: number;
       imageUrl?: string;
       availability?: string;
     }>
@@ -474,6 +511,7 @@ export class StoreService {
       screen?: string;
       ram?: string;
       price: number;
+      compareAtPrice?: number;
       imageUrl?: string;
       availability?: string;
     }>;
@@ -499,6 +537,7 @@ export class StoreService {
       screen?: string;
       ram?: string;
       price: number;
+      compareAtPrice?: number;
       imageUrl?: string;
       availability?: string;
     }> = [];
@@ -511,6 +550,7 @@ export class StoreService {
         const avRaw = candidate.availability;
         const av =
           typeof avRaw === "string" ? avRaw.trim().toLowerCase() : undefined;
+        const compareAtPrice = this.parseOptionalPrice(candidate.compareAtPrice);
         variants.push({
           color: typeof candidate.color === "string" ? candidate.color.trim() || undefined : undefined,
           memory: typeof candidate.memory === "string" ? candidate.memory.trim() || undefined : undefined,
@@ -518,6 +558,7 @@ export class StoreService {
           screen: typeof candidate.screen === "string" ? candidate.screen.trim() || undefined : undefined,
           ram: typeof candidate.ram === "string" ? candidate.ram.trim() || undefined : undefined,
           price: parsedPrice,
+          ...(compareAtPrice ? { compareAtPrice } : {}),
           imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() || undefined : undefined,
           availability:
             av && ["in_stock", "coming_soon", "out_of_stock", "unknown"].includes(av) ? av : undefined

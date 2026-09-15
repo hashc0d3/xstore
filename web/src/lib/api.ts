@@ -47,6 +47,7 @@ export async function upsertProduct(input: {
   color?: string;
   description?: string;
   basePrice: number;
+  compareAtPrice?: number;
   memoryPrices?: Record<string, number>;
   variants?: Array<{
     color?: string;
@@ -55,6 +56,7 @@ export async function upsertProduct(input: {
     screen?: string;
     ram?: string;
     price: number;
+    compareAtPrice?: number;
     imageUrl?: string;
     availability?: string;
   }>;

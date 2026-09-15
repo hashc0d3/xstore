@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createCategory, deleteCategory, deleteProduct, fetchStoreData, fileToDataUrl, updateCategory, upsertProduct } from "@/lib/api";
-import { Product, ProductVariant, StoreData, defaultStoreData, toRub } from "@/lib/store";
+import { Product, ProductVariant, StoreData, defaultStoreData, parseOptionalCompareAt, toRub } from "@/lib/store";
 
 function createSlug(value: string): string {
   return value
@@ -15,6 +15,8 @@ function createSlug(value: string): string {
 
 const IPHONE_LIKE_SLUGS = new Set(["iphone", "iphone-used"]);
 const MACBOOK_LIKE_SLUGS = new Set(["macbook"]);
+const IPAD_LIKE_SLUGS = new Set(["ipad"]);
+const WATCH_LIKE_SLUGS = new Set(["apple-watch"]);
 
 function isIphoneLikeCategory(slug: string): boolean {
   return IPHONE_LIKE_SLUGS.has(slug);
@@ -22,6 +24,14 @@ function isIphoneLikeCategory(slug: string): boolean {
 
 function isMacbookLikeCategory(slug: string): boolean {
   return MACBOOK_LIKE_SLUGS.has(slug);
+}
+
+function isIpadLikeCategory(slug: string): boolean {
+  return IPAD_LIKE_SLUGS.has(slug);
+}
+
+function isWatchLikeCategory(slug: string): boolean {
+  return WATCH_LIKE_SLUGS.has(slug);
 }
 
 /** Совпадает с защищёнными slug в API (ensureSeedData). */
@@ -64,13 +74,33 @@ export default function AdminPage() {
   const [productColorImages, setProductColorImages] = useState<Record<string, string>>({});
   const [productColorImageNames, setProductColorImageNames] = useState<Record<string, string>>({});
   const [productVariants, setProductVariants] = useState<
-    Array<{ color: string; memory: string; simType: string; screen: string; ram: string; price: string }>
-  >([{ color: "", memory: "", simType: "", screen: "", ram: "", price: "" }]);
+    Array<{ color: string; memory: string; simType: string; screen: string; ram: string; price: string; compareAtPrice: string }>
+  >([{ color: "", memory: "", simType: "", screen: "", ram: "", price: "", compareAtPrice: "" }]);
 
   const categories = data.categories;
   const products = data.products;
   const isIphoneCategory = isIphoneLikeCategory(productCategory);
   const isMacbookCategory = isMacbookLikeCategory(productCategory);
+  const isIpadCategory = isIpadLikeCategory(productCategory);
+  const isWatchCategory = isWatchLikeCategory(productCategory);
+  const usesMemory = isIphoneCategory || isMacbookCategory || isIpadCategory;
+  const usesSim = isIphoneCategory || isIpadCategory || isWatchCategory;
+  const usesScreen = isMacbookCategory || isIpadCategory || isWatchCategory;
+  const usesRam = isMacbookCategory;
+  const screenSetTitle = isWatchCategory ? "Набор размеров корпуса" : "Набор диагоналей экрана";
+  const screenPlaceholder = isWatchCategory
+    ? "Добавить размер (например, 42 mm или 46 mm)"
+    : 'Добавить диагональ (например, 11" или 13")';
+  const simSetTitle = isWatchCategory
+    ? "Набор ремешков"
+    : isIpadCategory
+      ? "Набор типов связи"
+      : "Набор типов SIM";
+  const simPlaceholder = isWatchCategory
+    ? "Добавить ремешок (например, S/M или M/L)"
+    : isIpadCategory
+      ? "Добавить связь (например, Wi-Fi или Wi-Fi + Cellular)"
+      : "Добавить тип SIM (например, eSIM + nano-SIM)";
 
   const productsByCategory = useMemo(() => {
     return categories.map((cat) => ({
@@ -104,25 +134,32 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (isIphoneCategory) return;
+    if (usesSim) return;
     setProductSimOptions([]);
     setNewSimOption("");
     setProductVariants((prev) => prev.map((item) => ({ ...item, simType: "" })));
-    if (!isMacbookCategory) {
-      setProductMemoryOptions([]);
-      setNewMemoryOption("");
-      setProductVariants((prev) => prev.map((item) => ({ ...item, memory: "" })));
-    }
-  }, [isIphoneCategory, isMacbookCategory]);
+  }, [usesSim]);
 
   useEffect(() => {
-    if (isMacbookCategory) return;
+    if (usesMemory) return;
+    setProductMemoryOptions([]);
+    setNewMemoryOption("");
+    setProductVariants((prev) => prev.map((item) => ({ ...item, memory: "" })));
+  }, [usesMemory]);
+
+  useEffect(() => {
+    if (usesScreen) return;
     setProductScreenOptions([]);
-    setProductRamOptions([]);
     setNewScreenOption("");
+    setProductVariants((prev) => prev.map((item) => ({ ...item, screen: "" })));
+  }, [usesScreen]);
+
+  useEffect(() => {
+    if (usesRam) return;
+    setProductRamOptions([]);
     setNewRamOption("");
-    setProductVariants((prev) => prev.map((item) => ({ ...item, screen: "", ram: "" })));
-  }, [isMacbookCategory]);
+    setProductVariants((prev) => prev.map((item) => ({ ...item, ram: "" })));
+  }, [usesRam]);
 
   const onEditCategorySelect = (id: string) => {
     setEditCategoryId(id);
@@ -181,7 +218,7 @@ export default function AdminPage() {
 
   const mapVariantsToForm = (variants?: ProductVariant[]) => {
     if (!variants?.length) {
-      return [{ color: "", memory: "", simType: "", screen: "", ram: "", price: "" }];
+      return [{ color: "", memory: "", simType: "", screen: "", ram: "", price: "", compareAtPrice: "" }];
     }
     return variants.map((variant) => ({
       color: variant.color ?? "",
@@ -189,7 +226,8 @@ export default function AdminPage() {
       simType: variant.simType ?? "",
       screen: variant.screen ?? "",
       ram: variant.ram ?? "",
-      price: String(variant.price)
+      price: String(variant.price),
+      compareAtPrice: variant.compareAtPrice ? String(variant.compareAtPrice) : ""
     }));
   };
 
@@ -198,12 +236,12 @@ export default function AdminPage() {
       ...prev,
       {
         color: productColors[0] ?? "",
-        memory:
-          isIphoneCategory || isMacbookCategory ? (productMemoryOptions[0] ?? "") : "",
-        simType: isIphoneCategory ? (productSimOptions[0] ?? "") : "",
-        screen: isMacbookCategory ? (productScreenOptions[0] ?? "") : "",
-        ram: isMacbookCategory ? (productRamOptions[0] ?? "") : "",
-        price: ""
+        memory: usesMemory ? (productMemoryOptions[0] ?? "") : "",
+        simType: usesSim ? (productSimOptions[0] ?? "") : "",
+        screen: usesScreen ? (productScreenOptions[0] ?? "") : "",
+        ram: usesRam ? (productRamOptions[0] ?? "") : "",
+        price: "",
+        compareAtPrice: ""
       }
     ]);
   };
@@ -224,6 +262,7 @@ export default function AdminPage() {
       screen: string;
       ram: string;
       price: string;
+      compareAtPrice: string;
     }>
   ) => {
     setProductVariants((prev) => prev.map((row, idx) => (idx === index ? { ...row, ...patch } : row)));
@@ -411,7 +450,7 @@ export default function AdminPage() {
     setProductExistingImage("");
     setProductColorImages({});
     setProductColorImageNames({});
-    setProductVariants([{ color: "", memory: "", simType: "", screen: "", ram: "", price: "" }]);
+    setProductVariants([{ color: "", memory: "", simType: "", screen: "", ram: "", price: "", compareAtPrice: "" }]);
   };
 
   const startEditProduct = (product: Product) => {
@@ -434,6 +473,7 @@ export default function AdminPage() {
               {
                 color: product.color,
                 price: product.basePrice,
+                compareAtPrice: product.compareAtPrice,
                 imageUrl: product.imageUrl
               }
             ]
@@ -498,6 +538,7 @@ export default function AdminPage() {
       screen?: string;
       ram?: string;
       price: number;
+      compareAtPrice?: number;
       imageUrl?: string;
     }> = [];
     for (const item of productVariants) {
@@ -505,14 +546,15 @@ export default function AdminPage() {
       if (Number.isNaN(price)) continue;
       const color = item.color.trim();
       const colorImage = color ? productColorImages[color] : undefined;
+      const compareAtPrice = parseOptionalCompareAt(item.compareAtPrice);
       variants.push({
         color: color || undefined,
-        memory:
-          isIphoneCategory || isMacbookCategory ? (item.memory.trim() || undefined) : undefined,
-        simType: isIphoneCategory ? (item.simType.trim() || undefined) : undefined,
-        screen: isMacbookCategory ? (item.screen.trim() || undefined) : undefined,
-        ram: isMacbookCategory ? (item.ram.trim() || undefined) : undefined,
+        memory: usesMemory ? (item.memory.trim() || undefined) : undefined,
+        simType: usesSim ? (item.simType.trim() || undefined) : undefined,
+        screen: usesScreen ? (item.screen.trim() || undefined) : undefined,
+        ram: usesRam ? (item.ram.trim() || undefined) : undefined,
         price,
+        ...(compareAtPrice ? { compareAtPrice } : {}),
         imageUrl: colorImage || defaultImageUrl
       });
     }
@@ -524,18 +566,21 @@ export default function AdminPage() {
     const missingColorImages = requiredColors.filter((color) => !productColorImages[color] && !productExistingImage.trim());
     const hasVariantWithoutColor = productVariants.some((item) => Boolean(item.price.trim()) && !item.color.trim());
     const hasVariantWithoutMemory =
-      (isIphoneCategory || isMacbookCategory) && productMemoryOptions.length
+      usesMemory && productMemoryOptions.length
         ? productVariants.some((item) => Boolean(item.price.trim()) && !item.memory.trim())
         : false;
-    const hasVariantWithoutSim = isIphoneCategory && productSimOptions.length
-      ? productVariants.some((item) => Boolean(item.price.trim()) && !item.simType.trim())
-      : false;
-    const hasVariantWithoutScreen = isMacbookCategory && productScreenOptions.length
-      ? productVariants.some((item) => Boolean(item.price.trim()) && !item.screen.trim())
-      : false;
-    const hasVariantWithoutRam = isMacbookCategory && productRamOptions.length
-      ? productVariants.some((item) => Boolean(item.price.trim()) && !item.ram.trim())
-      : false;
+    const hasVariantWithoutSim =
+      usesSim && productSimOptions.length
+        ? productVariants.some((item) => Boolean(item.price.trim()) && !item.simType.trim())
+        : false;
+    const hasVariantWithoutScreen =
+      usesScreen && productScreenOptions.length
+        ? productVariants.some((item) => Boolean(item.price.trim()) && !item.screen.trim())
+        : false;
+    const hasVariantWithoutRam =
+      usesRam && productRamOptions.length
+        ? productVariants.some((item) => Boolean(item.price.trim()) && !item.ram.trim())
+        : false;
 
     if (!name || !categorySlug || Number.isNaN(basePrice)) {
       setProductFormError("Заполните название, категорию и цену хотя бы у одного варианта.");
@@ -550,15 +595,29 @@ export default function AdminPage() {
       return;
     }
     if (hasVariantWithoutMemory) {
-      setProductFormError("Укажите объем памяти для каждого варианта с ценой.");
+      setProductFormError(
+        isIpadCategory || isMacbookCategory
+          ? "Укажите накопитель для каждого варианта с ценой."
+          : "Укажите объем памяти для каждого варианта с ценой."
+      );
       return;
     }
     if (hasVariantWithoutSim) {
-      setProductFormError("Укажите тип SIM для каждого варианта с ценой.");
+      setProductFormError(
+        isWatchCategory
+          ? "Укажите ремешок для каждого варианта с ценой."
+          : isIpadCategory
+            ? "Укажите тип связи для каждого варианта с ценой."
+            : "Укажите тип SIM для каждого варианта с ценой."
+      );
       return;
     }
     if (hasVariantWithoutScreen) {
-      setProductFormError("Укажите диагональ для каждого варианта с ценой.");
+      setProductFormError(
+        isWatchCategory
+          ? "Укажите размер корпуса для каждого варианта с ценой."
+          : "Укажите диагональ для каждого варианта с ценой."
+      );
       return;
     }
     if (hasVariantWithoutRam) {
@@ -835,18 +894,18 @@ export default function AdminPage() {
                   <p className="text-xs text-zinc-500">Сначала добавьте цвета, затем загрузите фото для каждого цвета.</p>
                 )}
               </div>
-              {isIphoneCategory || isMacbookCategory ? (
+              {usesMemory ? (
                 <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                   <p className="text-sm font-semibold text-zinc-800">
-                    {isMacbookCategory ? "Набор объемов накопителя" : "Набор объемов памяти"}
+                    {isIphoneCategory ? "Набор объемов памяти" : "Набор объемов накопителя"}
                   </p>
                   <div className="flex gap-2">
                     <input
                       className="field"
                       placeholder={
-                        isMacbookCategory
-                          ? "Добавить объем (например, 512GB или 1TB)"
-                          : "Добавить объем (например, 256 ГБ)"
+                        isIphoneCategory
+                          ? "Добавить объем (например, 256 ГБ)"
+                          : "Добавить объем (например, 256 ГБ или 1 ТБ)"
                       }
                       value={newMemoryOption}
                       onChange={(e) => setNewMemoryOption(e.target.value)}
@@ -880,17 +939,21 @@ export default function AdminPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-zinc-500">Добавьте объемы памяти, которые будут доступны в вариантах.</p>
+                    <p className="text-xs text-zinc-500">
+                      {isIphoneCategory
+                        ? "Добавьте объемы памяти, которые будут доступны в вариантах."
+                        : "Добавьте объемы накопителя, которые будут доступны в вариантах."}
+                    </p>
                   )}
                 </div>
               ) : null}
-              {isIphoneCategory ? (
+              {usesSim ? (
                 <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-sm font-semibold text-zinc-800">Набор типов SIM</p>
+                  <p className="text-sm font-semibold text-zinc-800">{simSetTitle}</p>
                   <div className="flex gap-2">
                     <input
                       className="field"
-                      placeholder="Добавить тип SIM (например, eSIM + nano-SIM)"
+                      placeholder={simPlaceholder}
                       value={newSimOption}
                       onChange={(e) => setNewSimOption(e.target.value)}
                       onKeyDown={(e) => {
@@ -916,102 +979,118 @@ export default function AdminPage() {
                           type="button"
                           className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
                           onClick={() => removeProductSimOption(option)}
-                          title="Удалить тип SIM"
+                          title={
+                            isWatchCategory
+                              ? "Удалить ремешок"
+                              : isIpadCategory
+                                ? "Удалить тип связи"
+                                : "Удалить тип SIM"
+                          }
                         >
                           {option} ×
                         </button>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-zinc-500">Добавьте типы SIM, которые будут доступны в вариантах.</p>
+                    <p className="text-xs text-zinc-500">
+                      {isWatchCategory
+                        ? "Добавьте ремешки, которые будут доступны в вариантах."
+                        : isIpadCategory
+                          ? "Добавьте типы связи, которые будут доступны в вариантах."
+                          : "Добавьте типы SIM, которые будут доступны в вариантах."}
+                    </p>
                   )}
                 </div>
               ) : null}
-              {isMacbookCategory ? (
-                <>
-                  <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                    <p className="text-sm font-semibold text-zinc-800">Набор диагоналей экрана</p>
-                    <div className="flex gap-2">
-                      <input
-                        className="field"
-                        placeholder={'Добавить диагональ (например, 13" или 14")'}
-                        value={newScreenOption}
-                        onChange={(e) => setNewScreenOption(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addProductScreenOption();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                        onClick={addProductScreenOption}
-                      >
-                        Добавить
-                      </button>
-                    </div>
-                    {productScreenOptions.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {productScreenOptions.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
-                            onClick={() => removeProductScreenOption(option)}
-                            title="Удалить диагональ"
-                          >
-                            {option} ×
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-zinc-500">Добавьте диагонали, которые будут доступны в вариантах.</p>
-                    )}
+              {usesScreen ? (
+                <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-sm font-semibold text-zinc-800">{screenSetTitle}</p>
+                  <div className="flex gap-2">
+                    <input
+                      className="field"
+                      placeholder={screenPlaceholder}
+                      value={newScreenOption}
+                      onChange={(e) => setNewScreenOption(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addProductScreenOption();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                      onClick={addProductScreenOption}
+                    >
+                      Добавить
+                    </button>
                   </div>
-                  <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                    <p className="text-sm font-semibold text-zinc-800">Набор объемов оперативной памяти</p>
-                    <div className="flex gap-2">
-                      <input
-                        className="field"
-                        placeholder="Добавить RAM (например, 16GB или 24GB)"
-                        value={newRamOption}
-                        onChange={(e) => setNewRamOption(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addProductRamOption();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                        onClick={addProductRamOption}
-                      >
-                        Добавить
-                      </button>
+                  {productScreenOptions.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {productScreenOptions.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
+                          onClick={() => removeProductScreenOption(option)}
+                          title={isWatchCategory ? "Удалить размер корпуса" : "Удалить диагональ"}
+                        >
+                          {option} ×
+                        </button>
+                      ))}
                     </div>
-                    {productRamOptions.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {productRamOptions.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
-                            onClick={() => removeProductRamOption(option)}
-                            title="Удалить RAM"
-                          >
-                            {option} ×
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-zinc-500">Добавьте объемы RAM, которые будут доступны в вариантах.</p>
-                    )}
+                  ) : (
+                    <p className="text-xs text-zinc-500">
+                      {isWatchCategory
+                        ? "Добавьте размеры корпуса, которые будут доступны в вариантах."
+                        : "Добавьте диагонали, которые будут доступны в вариантах."}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+              {usesRam ? (
+                <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-sm font-semibold text-zinc-800">Набор объемов оперативной памяти</p>
+                  <div className="flex gap-2">
+                    <input
+                      className="field"
+                      placeholder="Добавить RAM (например, 16GB или 24GB)"
+                      value={newRamOption}
+                      onChange={(e) => setNewRamOption(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addProductRamOption();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                      onClick={addProductRamOption}
+                    >
+                      Добавить
+                    </button>
                   </div>
-                </>
+                  {productRamOptions.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {productRamOptions.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700"
+                          onClick={() => removeProductRamOption(option)}
+                          title="Удалить RAM"
+                        >
+                          {option} ×
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500">Добавьте объемы RAM, которые будут доступны в вариантах.</p>
+                  )}
+                </div>
               ) : null}
               <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                 <div className="flex items-center justify-between">
@@ -1036,86 +1115,111 @@ export default function AdminPage() {
                           </option>
                         ))}
                       </select>
-                      {isIphoneCategory ? (
-                        <>
-                          <select
-                            className="field"
-                            value={variant.memory}
-                            disabled={!productMemoryOptions.length}
-                            onChange={(e) => updateVariantRow(index, { memory: e.target.value })}
-                          >
-                            <option value="">{productMemoryOptions.length ? "Выберите объем памяти" : "Сначала добавьте объемы"}</option>
-                            {productMemoryOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="field"
-                            value={variant.simType}
-                            disabled={!productSimOptions.length}
-                            onChange={(e) => updateVariantRow(index, { simType: e.target.value })}
-                          >
-                            <option value="">{productSimOptions.length ? "Выберите тип SIM" : "Сначала добавьте типы SIM"}</option>
-                            {productSimOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </>
+                      {usesScreen ? (
+                        <select
+                          className="field"
+                          value={variant.screen}
+                          disabled={!productScreenOptions.length}
+                          onChange={(e) => updateVariantRow(index, { screen: e.target.value })}
+                        >
+                          <option value="">
+                            {productScreenOptions.length
+                              ? isWatchCategory
+                                ? "Выберите размер корпуса"
+                                : "Выберите диагональ"
+                              : isWatchCategory
+                                ? "Сначала добавьте размеры корпуса"
+                                : "Сначала добавьте диагонали"}
+                          </option>
+                          {productScreenOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                       ) : null}
-                      {isMacbookCategory ? (
-                        <>
-                          <select
-                            className="field"
-                            value={variant.screen}
-                            disabled={!productScreenOptions.length}
-                            onChange={(e) => updateVariantRow(index, { screen: e.target.value })}
-                          >
-                            <option value="">{productScreenOptions.length ? "Выберите диагональ" : "Сначала добавьте диагонали"}</option>
-                            {productScreenOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="field"
-                            value={variant.memory}
-                            disabled={!productMemoryOptions.length}
-                            onChange={(e) => updateVariantRow(index, { memory: e.target.value })}
-                          >
-                            <option value="">{productMemoryOptions.length ? "Выберите накопитель" : "Сначала добавьте объемы"}</option>
-                            {productMemoryOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="field"
-                            value={variant.ram}
-                            disabled={!productRamOptions.length}
-                            onChange={(e) => updateVariantRow(index, { ram: e.target.value })}
-                          >
-                            <option value="">{productRamOptions.length ? "Выберите RAM" : "Сначала добавьте RAM"}</option>
-                            {productRamOptions.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </>
+                      {usesMemory ? (
+                        <select
+                          className="field"
+                          value={variant.memory}
+                          disabled={!productMemoryOptions.length}
+                          onChange={(e) => updateVariantRow(index, { memory: e.target.value })}
+                        >
+                          <option value="">
+                            {productMemoryOptions.length
+                              ? isIphoneCategory
+                                ? "Выберите объем памяти"
+                                : "Выберите накопитель"
+                              : "Сначала добавьте объемы"}
+                          </option>
+                          {productMemoryOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                       ) : null}
+                      {usesRam ? (
+                        <select
+                          className="field"
+                          value={variant.ram}
+                          disabled={!productRamOptions.length}
+                          onChange={(e) => updateVariantRow(index, { ram: e.target.value })}
+                        >
+                          <option value="">{productRamOptions.length ? "Выберите RAM" : "Сначала добавьте RAM"}</option>
+                          {productRamOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      {usesSim ? (
+                        <select
+                          className="field"
+                          value={variant.simType}
+                          disabled={!productSimOptions.length}
+                          onChange={(e) => updateVariantRow(index, { simType: e.target.value })}
+                        >
+                          <option value="">
+                            {productSimOptions.length
+                              ? isWatchCategory
+                                ? "Выберите ремешок"
+                                : isIpadCategory
+                                  ? "Выберите тип связи"
+                                  : "Выберите тип SIM"
+                              : isWatchCategory
+                                ? "Сначала добавьте ремешки"
+                                : isIpadCategory
+                                  ? "Сначала добавьте типы связи"
+                                  : "Сначала добавьте типы SIM"}
+                          </option>
+                          {productSimOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <input
                         className="field"
                         type="number"
                         min={0}
+                        step={1}
                         placeholder="Цена варианта"
                         value={variant.price}
                         onChange={(e) => updateVariantRow(index, { price: e.target.value })}
+                      />
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="Старая цена (необязательно)"
+                        value={variant.compareAtPrice}
+                        onChange={(e) => updateVariantRow(index, { compareAtPrice: e.target.value })}
                       />
                     </div>
                     <div className="flex justify-end">
@@ -1132,7 +1236,7 @@ export default function AdminPage() {
                 ))}
               </div>
               <p className="text-xs text-zinc-500">
-                Для iPhone и iPhone Б/У: цвета + фото + наборы памяти и SIM. Для MacBook: цвета + фото + диагональ, накопитель, RAM. Для остальных категорий: только цвет, фото и цена.
+                Для iPhone и iPhone Б/У: цвета + фото + наборы памяти и SIM. Для iPad: цвета + фото + диагональ, накопитель и связь. Для Apple Watch: цвета + фото + размер корпуса и ремешок. Для MacBook: цвета + фото + диагональ, накопитель, RAM. Для остальных категорий: только цвет, фото и цена. Старая цена необязательна: если заполнить, на витрине она будет перечёркнутой, а скидка в процентах посчитается сама. Уже сохранённые варианты не затираются: при редактировании подтягиваются текущие параметры.
               </p>
               {productFormError ? <p className="text-sm font-medium text-red-600">{productFormError}</p> : null}
               <div className="flex items-center gap-2">
@@ -1178,6 +1282,9 @@ export default function AdminPage() {
                           <p className="font-medium">{item.name}</p>
                           {item.description ? <p className="text-xs text-zinc-500">Описание: {item.description}</p> : null}
                           <p className="text-sm text-zinc-500">Базовая цена: {toRub(item.basePrice)}</p>
+                          {item.compareAtPrice ? (
+                            <p className="text-xs text-[#800020] line-through">Старая цена: {toRub(item.compareAtPrice)}</p>
+                          ) : null}
                           {item.variants?.length ? (
                             <div className="mt-1 space-y-1 text-xs text-zinc-500">
                               {item.variants.map((variant, index) => {
@@ -1192,6 +1299,11 @@ export default function AdminPage() {
                                 return (
                                   <p key={`${item.id}-${index}`}>
                                     {label} — {toRub(variant.price)}
+                                    {variant.compareAtPrice ? (
+                                      <span className="ml-1 text-[#800020] line-through">
+                                        {toRub(variant.compareAtPrice)}
+                                      </span>
+                                    ) : null}
                                   </p>
                                 );
                               })}
