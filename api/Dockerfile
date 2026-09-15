@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 ENV PORT=4000
 ENV DATABASE_URL=file:/data/dev.db
 
-RUN mkdir -p /data /app/catalog
+RUN mkdir -p /data /data/uploads /app/catalog
 
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules

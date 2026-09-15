@@ -1,7 +1,3 @@
-import Storefront from "@/components/storefront";
-import { getStoreDataServer } from "@/lib/server/get-store-data";
-
-export default async function CatalogPage() {
-  const initialStoreData = await getStoreDataServer();
-  return <Storefront initialStoreData={initialStoreData} />;
+export default function CatalogPage() {
+  return null;
 }

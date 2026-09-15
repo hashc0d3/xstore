@@ -27,6 +27,7 @@ const IPHONE_LIKE_SLUGS = new Set(["iphone", "iphone-used"]);
 const MACBOOK_LIKE_SLUGS = new Set(["macbook"]);
 const IPAD_LIKE_SLUGS = new Set(["ipad"]);
 const WATCH_LIKE_SLUGS = new Set(["apple-watch"]);
+const CATALOG_PAGE_SIZE = 8;
 
 function normalizeCategorySlug(slug: string | undefined): string | undefined {
   if (!slug) return undefined;
@@ -228,10 +229,8 @@ function CategoryCard({ category, onPodZakaz }: { category: Category; onPodZakaz
     "apple-watch": ["/applewatch.png", "/watch.png", "/watch.jpg", "/watch.webp"],
     ipad: ["/ipad.png", "/ipad.jpg", "/ipad.webp"],
     airpods: ["/airpods.png", "/airpods.jpg", "/airpods.webp"],
-    dyson: [
-      "https://www.glushakov-official.ru/img/dyson/styler_hs08/vinca_blue_topaz/front.webp"
-    ],
-    consoles: ["https://www.glushakov-official.ru/img/consoles/ps5/1.jpg"],
+    dyson: ["/image.png"],
+    consoles: ["/image.png"],
     custom: ["/zakaz.png", "/custom.png", "/custom.jpg", "/custom.webp"]
   };
   const slugFallback = imageCandidatesBySlug[category.slug] ?? [];
@@ -275,6 +274,8 @@ function CategoryCard({ category, onPodZakaz }: { category: Category; onPodZakaz
           <img
             src={imageSrc}
             alt={category.name}
+            loading="lazy"
+            decoding="async"
             className={`pointer-events-none absolute w-auto object-contain min-[640px]:h-[98%] ${imagePlacement} ${
               isDark ? "opacity-95" : "opacity-100"
             }`}
@@ -311,12 +312,14 @@ function CategoryCard({ category, onPodZakaz }: { category: Category; onPodZakaz
 function ProductCard({
   product,
   category,
+  eager,
   onOrder,
   onAddToCart,
   onOpenDetails
 }: {
   product: Product;
   category?: Category;
+  eager?: boolean;
   onOrder: (selection: VariantSelection) => void;
   onAddToCart: (
     selection: VariantSelection & { price: number; imageUrl: string }
@@ -488,8 +491,11 @@ function ProductCard({
       <div className="overflow-hidden rounded-xl bg-white min-[640px]:rounded-2xl">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={currentImage}
+          src={currentImage || "/image.png"}
           alt={product.name}
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={eager ? "high" : "low"}
           className="h-[7.5rem] w-full object-contain p-1 transition-opacity duration-300 min-[640px]:h-[8.5rem]"
         />
       </div>
@@ -762,6 +768,7 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
     ram?: string;
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [catalogVisibleCount, setCatalogVisibleCount] = useState(CATALOG_PAGE_SIZE);
   const [storeData, setStoreData] = useState<StoreData>(() => initialStoreData ?? defaultStoreData);
   const [storeFetched, setStoreFetched] = useState(() => Boolean(initialStoreData));
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -793,11 +800,16 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
   }, [cartHydrated, cartItems]);
 
   useEffect(() => {
+    const hasServerCatalog = Boolean(initialStoreData?.categories.some((item) => item.id.length > 8));
+    if (hasServerCatalog) {
+      setStoreFetched(true);
+      return;
+    }
     void fetchStoreData().then((remote) => {
       setStoreData(remote);
       setStoreFetched(true);
     });
-  }, []);
+  }, [initialStoreData]);
 
   const reviewPhotos = useMemo(() => {
     return (storeData.sliderPhotos ?? []).filter((photo) => photo.imageUrl);
@@ -979,9 +991,10 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return visibleProducts;
+    const pool = query ? storeData.products : visibleProducts;
+    if (!query) return pool;
 
-    return visibleProducts.filter((product) => {
+    return pool.filter((product) => {
       const categoryName = categoriesBySlug[product.categorySlug]?.name ?? "";
       const variantHaystack = (product.variants ?? [])
         .flatMap((variant) => [
@@ -997,7 +1010,16 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [categoriesBySlug, searchQuery, visibleProducts]);
+  }, [categoriesBySlug, searchQuery, storeData.products, visibleProducts]);
+
+  const shownCatalogProducts = useMemo(
+    () => filteredProducts.slice(0, catalogVisibleCount),
+    [catalogVisibleCount, filteredProducts]
+  );
+
+  useEffect(() => {
+    setCatalogVisibleCount(CATALOG_PAGE_SIZE);
+  }, [pathname, searchQuery]);
 
   const visibleReviewPhotos = useMemo(() => {
     if (!reviewPhotos.length) return [];
@@ -2474,7 +2496,13 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
                         onClick={() => setReviewSlideIndex(index)}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo.imageUrl} alt={photo.title ?? SLIDER_PHOTO_ALT_FALLBACK} className="h-full w-full object-cover" />
+                        <img
+                          src={photo.imageUrl}
+                          alt={photo.title ?? SLIDER_PHOTO_ALT_FALLBACK}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
                       </button>
                     ))}
                   </div>
@@ -2519,7 +2547,11 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
           <section className="mt-8 min-[640px]:mt-10">
             <div className="mb-4 flex flex-col gap-2 min-[640px]:mb-5 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between">
               <h2 className="text-2xl font-bold text-zinc-900 min-[640px]:text-3xl min-[1920px]:text-4xl">
-                {activeCategory ? `Товары: ${activeCategory.name}` : "Все товары"}
+                {searchQuery.trim()
+                  ? "Результаты поиска"
+                  : activeCategory
+                    ? `Товары: ${activeCategory.name}`
+                    : "Все товары"}
               </h2>
               <input
                 className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 min-[640px]:w-80"
@@ -2531,11 +2563,13 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
             {!storeFetched ? (
               <ProductGridSkeleton />
             ) : filteredProducts.length ? (
+              <>
               <div className="grid grid-cols-2 gap-2 min-[640px]:grid-cols-2 min-[640px]:gap-3 min-[960px]:grid-cols-5 min-[1440px]:grid-cols-6 min-[1920px]:grid-cols-7 min-[1920px]:gap-4">
-                {filteredProducts.map((product) => (
+                {shownCatalogProducts.map((product, index) => (
                   <ProductCard
                     key={product.id}
                     product={product}
+                    eager={index < CATALOG_PAGE_SIZE}
                     category={categoriesBySlug[product.categorySlug]}
                     onOrder={(selection) => {
                       setOrderSelection({
@@ -2597,6 +2631,21 @@ export default function Storefront({ initialStoreData }: StorefrontProps) {
                   />
                 ))}
               </div>
+              {catalogVisibleCount < filteredProducts.length ? (
+                <div className="mt-5 flex flex-col items-center gap-2">
+                  <p className="text-sm text-zinc-500">
+                    Показано {shownCatalogProducts.length} из {filteredProducts.length}
+                  </p>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50"
+                    onClick={() => setCatalogVisibleCount((count) => count + CATALOG_PAGE_SIZE)}
+                  >
+                    Показать ещё
+                  </button>
+                </div>
+              ) : null}
+              </>
             ) : (
               <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center text-zinc-500">
                 По вашему запросу товары не найдены.

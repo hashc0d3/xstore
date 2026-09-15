@@ -6,6 +6,8 @@ import { CreateCategoryDto } from "./dto/create-category.dto";
 import { UpdateCategoryDto } from "./dto/update-category.dto";
 import { UpsertSliderPhotosDto } from "./dto/upsert-slider-photos.dto";
 import { UpsertProductDto } from "./dto/upsert-product.dto";
+import { persistStoreImage } from "./image-store";
+import { getCachedStore, invalidateStoreCache, setCachedStore } from "./store-cache";
 
 type StoreCategory = {
   id: string;
@@ -106,6 +108,9 @@ export class StoreService {
   }
 
   async getStoreData() {
+    const cached = getCachedStore();
+    if (cached) return cached;
+
     const rawCategories = await this.prisma.category.findMany({
       orderBy: { createdAt: "asc" }
     });
@@ -117,12 +122,63 @@ export class StoreService {
     const buyback = await this.getBuybackConfigRecordSafe();
     const sliderPhotos = await this.getSliderPhotosSafe();
 
-    return {
+    const data = {
       categories: categories.map((item) => this.toCategory(item)),
       products: products.map((item) => this.toProduct(item)),
       buybackConfig: this.toBuybackConfig(buyback),
       sliderPhotos
     };
+    setCachedStore(data);
+    return data;
+  }
+
+  /** Выносит data URL и внешние фото на диск. Карточки не удаляет: при ошибке URL остаётся как был. */
+  async materializeInlineImages(): Promise<void> {
+    const products = await this.prisma.product.findMany({ include: { category: true } });
+    for (const product of products) {
+      try {
+        const imageUrl = (await persistStoreImage(product.imageUrl, product.id)) ?? product.imageUrl;
+        const { variants } = this.readPricingPayload(product.memoryPrices);
+        let variantsChanged = false;
+        const nextVariants: typeof variants = [];
+        for (const [index, variant] of variants.entries()) {
+          const nextImage = variant.imageUrl
+            ? await persistStoreImage(variant.imageUrl, `${product.id}-v${index}`)
+            : undefined;
+          if (nextImage && nextImage !== variant.imageUrl) variantsChanged = true;
+          nextVariants.push({ ...variant, imageUrl: nextImage ?? variant.imageUrl });
+        }
+        const nextMemory = variantsChanged
+          ? ({ variants: nextVariants } as Prisma.InputJsonValue)
+          : (product.memoryPrices as Prisma.InputJsonValue);
+        if (imageUrl !== product.imageUrl || variantsChanged) {
+          await this.prisma.product.update({
+            where: { id: product.id },
+            data: {
+              imageUrl,
+              ...(variantsChanged ? { memoryPrices: nextMemory } : {})
+            }
+          });
+        }
+      } catch {
+        // Карточка остаётся в БД с прежними полями.
+      }
+    }
+
+    const categories = await this.prisma.category.findMany();
+    for (const category of categories) {
+      if (!category.imageUrl) continue;
+      try {
+        const imageUrl = await persistStoreImage(category.imageUrl, `cat-${category.id}`);
+        if (imageUrl && imageUrl !== category.imageUrl) {
+          await this.prisma.category.update({ where: { id: category.id }, data: { imageUrl } });
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    invalidateStoreCache();
   }
 
   async getBuybackConfig(): Promise<BuybackConfigPayload> {
@@ -151,6 +207,7 @@ export class StoreService {
         conditions: conditions.join("|")
       }
     });
+    invalidateStoreCache();
     return this.toBuybackConfig(saved);
   }
 
@@ -165,10 +222,11 @@ export class StoreService {
       data: {
         name,
         slug,
-        imageUrl: dto.imageUrl?.trim() || null,
+        imageUrl: (await persistStoreImage(dto.imageUrl?.trim() || undefined, `cat-${slug}`)) || null,
         memoryOptions: (dto.memoryOptions ?? []).filter(Boolean).join("|")
       }
     });
+    invalidateStoreCache();
     return this.toCategory(created);
   }
 
@@ -187,7 +245,11 @@ export class StoreService {
     }
     if (dto.imageUrl !== undefined) {
       const raw = dto.imageUrl.trim();
-      data.imageUrl = raw || null;
+      if (!raw) {
+        data.imageUrl = null;
+      } else {
+        data.imageUrl = (await persistStoreImage(raw, `cat-${id}`)) || raw;
+      }
     }
     if (Object.keys(data).length === 0) {
       throw new BadRequestException("Укажите новое название и/или фото");
@@ -196,6 +258,7 @@ export class StoreService {
       where: { id },
       data
     });
+    invalidateStoreCache();
     return this.toCategory(saved);
   }
 
@@ -207,16 +270,27 @@ export class StoreService {
       throw new NotFoundException("Категория не найдена");
     }
 
-    const payload: Prisma.ProductUncheckedCreateInput = {
+    const productKey = dto.id?.trim() || randomUUID();
+    const persistedImage =
+      (await persistStoreImage(dto.imageUrl?.trim() || undefined, productKey)) || "/image.png";
+    const persistedVariants = dto.variants
+      ? await Promise.all(
+          dto.variants.map(async (variant, index) => ({
+            ...variant,
+            imageUrl: (await persistStoreImage(variant.imageUrl, `${productKey}-v${index}`)) ?? variant.imageUrl
+          }))
+        )
+      : dto.variants;
+
+    const payload = {
       name: dto.name.trim(),
       categoryId: category.id,
       color: dto.color?.trim() || null,
       description: dto.description?.trim() || null,
       basePrice: Number(dto.basePrice),
       compareAtPrice: this.resolveProductCompareAtPrice(dto) ?? null,
-      memoryPrices: this.normalizePricingPayload(dto.memoryPrices, dto.variants) as Prisma.InputJsonValue,
-      imageUrl:
-        dto.imageUrl?.trim() || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80"
+      memoryPrices: this.normalizePricingPayload(dto.memoryPrices, persistedVariants) as Prisma.InputJsonValue,
+      imageUrl: persistedImage
     };
 
     let saved: Product;
@@ -227,15 +301,17 @@ export class StoreService {
       });
     } else {
       saved = await this.prisma.product.create({
-        data: payload
+        data: { ...payload, id: productKey }
       });
     }
 
+    invalidateStoreCache();
     return this.toProduct({ ...saved, category });
   }
 
   async removeProduct(id: string): Promise<void> {
     await this.prisma.product.delete({ where: { id } });
+    invalidateStoreCache();
   }
 
   /** Slug'и из ensureSeedData — удаление запрещено, чтобы не сломать витрину. */
@@ -258,19 +334,23 @@ export class StoreService {
       throw new BadRequestException("Эту категорию нельзя удалить");
     }
     await this.prisma.category.delete({ where: { id } });
+    invalidateStoreCache();
   }
 
   async upsertSliderPhotos(dto: UpsertSliderPhotosDto): Promise<StoreSliderPhoto[]> {
     await this.ensureSliderPhotoTable();
 
-    const photos = dto.photos
-      .map((item, index) => ({
-        id: item.id?.trim() || undefined,
-        title: item.title?.trim() || null,
-        imageUrl: item.imageUrl.trim(),
-        position: Number.isFinite(Number(item.position)) ? Number(item.position) : index
-      }))
-      .filter((item) => item.imageUrl);
+    const photos = (
+      await Promise.all(
+        dto.photos.map(async (item, index) => ({
+          id: item.id?.trim() || undefined,
+          title: item.title?.trim() || null,
+          imageUrl:
+            (await persistStoreImage(item.imageUrl.trim(), `slide-${item.id?.trim() || index}`)) ?? item.imageUrl.trim(),
+          position: Number.isFinite(Number(item.position)) ? Number(item.position) : index
+        }))
+      )
+    ).filter((item) => item.imageUrl);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`DELETE FROM "SliderPhoto"`;
@@ -283,6 +363,7 @@ export class StoreService {
       }
     });
 
+    invalidateStoreCache();
     return this.getSliderPhotos();
   }
 

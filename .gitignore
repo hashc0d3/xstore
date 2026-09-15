@@ -14,5 +14,6 @@ node_modules/
 **/yarn.lock
 **/*.db
 **/*.db-*
+api/uploads/
 .DS_Store
 Thumbs.db

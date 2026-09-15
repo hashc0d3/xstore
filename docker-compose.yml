@@ -20,6 +20,7 @@ services:
       TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
       AUTO_SEED_CATALOG: "${AUTO_SEED_CATALOG:-1}"
       CATALOG_ROOT: "/app/catalog"
+      UPLOAD_DIR: "/data/uploads"
       # Имя сервиса, не 127.0.0.1: дочерние node-процессы (seed через spawn) стабильно достигают API.
       API_URL: "http://api:4000/api"
     volumes:

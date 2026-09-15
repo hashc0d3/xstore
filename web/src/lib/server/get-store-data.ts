@@ -12,7 +12,7 @@ function apiBase(): string {
 export async function getStoreDataServer(): Promise<StoreData> {
   try {
     const res = await fetch(`${apiBase()}/api/store`, {
-      cache: "no-store",
+      next: { revalidate: 20 },
       headers: { Accept: "application/json" }
     });
     if (!res.ok) throw new Error(`store ${res.status}`);

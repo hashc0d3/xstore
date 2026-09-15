@@ -530,7 +530,7 @@ export default function AdminPage() {
     const categorySlug = productCategory;
     const defaultImageUrl =
       productExistingImage.trim() ||
-      "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80";
+      "/image.png";
     const variants: Array<{
       color?: string;
       memory?: string;

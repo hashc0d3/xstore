@@ -84,7 +84,7 @@ export const defaultStoreData: StoreData = {
         "512 ГБ": 124990,
         "1 ТБ": 139990
       },
-      imageUrl: "https://images.unsplash.com/photo-1695048132842-b41495f12eb4?w=600&q=80"
+      imageUrl: "/iphone.png"
     },
     {
       id: "p2",
@@ -100,7 +100,7 @@ export const defaultStoreData: StoreData = {
         "512 ГБ": 102990,
         "1 ТБ": 117990
       },
-      imageUrl: "https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?w=600&q=80"
+      imageUrl: "/iphone.png"
     },
     {
       id: "p7",
@@ -115,7 +115,7 @@ export const defaultStoreData: StoreData = {
         "512 ГБ": 84990,
         "1 ТБ": 96990
       },
-      imageUrl: "https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?w=600&q=80"
+      imageUrl: "/iphone.png"
     },
     {
       id: "p3",
@@ -130,7 +130,7 @@ export const defaultStoreData: StoreData = {
         "512 ГБ": 139990,
         "1 ТБ": 164990
       },
-      imageUrl: "https://images.unsplash.com/photo-1517336714739-489689fd1ca8?w=600&q=80"
+      imageUrl: "/macbook.png"
     },
     {
       id: "p4",
@@ -141,7 +141,7 @@ export const defaultStoreData: StoreData = {
         "Беспроводные наушники с активным шумоподавлением, прозрачным режимом и удобной интеграцией с устройствами Apple.",
       basePrice: 24990,
       compareAtPrice: 29990,
-      imageUrl: "https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=80"
+      imageUrl: "/airpods.png"
     },
     {
       id: "p5",
@@ -156,7 +156,7 @@ export const defaultStoreData: StoreData = {
         "256 ГБ": 82990,
         "512 ГБ": 96990
       },
-      imageUrl: "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=600&q=80"
+      imageUrl: "/ipad.png"
     },
     {
       id: "p6",
@@ -166,7 +166,7 @@ export const defaultStoreData: StoreData = {
       description:
         "Умные часы для спорта и повседневной активности: мониторинг здоровья, уведомления и удобная синхронизация с iPhone.",
       basePrice: 42990,
-      imageUrl: "https://images.unsplash.com/photo-1579586337278-3f436f25d4d4?w=600&q=80"
+      imageUrl: "/applewatch.png"
     }
   ],
   buybackConfig: {

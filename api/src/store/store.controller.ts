@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post } from "@nestjs/common";
 import { CreateCategoryDto } from "./dto/create-category.dto";
 import { UpdateCategoryDto } from "./dto/update-category.dto";
 import { UpsertBuybackConfigDto } from "./dto/upsert-buyback-config.dto";
@@ -11,6 +11,7 @@ export class StoreController {
   constructor(private readonly storeService: StoreService) {}
 
   @Get()
+  @Header("Cache-Control", "public, max-age=15, s-maxage=30, stale-while-revalidate=120")
   async getStoreData() {
     return this.storeService.getStoreData();
   }

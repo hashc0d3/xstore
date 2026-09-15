@@ -176,5 +176,5 @@ export function fileToDataUrl(file: File): Promise<string> {
 }
 
 export function resolveProductImage(product: Product): string {
-  return product.imageUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80";
+  return product.imageUrl || "/image.png";
 }
