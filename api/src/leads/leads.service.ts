@@ -45,7 +45,7 @@ export class LeadsService {
     const chatId: number | string = /^-?\d+$/.test(chatIdRaw) ? Number(chatIdRaw) : chatIdRaw;
 
     const lines = [
-      "Новая заявка Sotik77",
+      "Новая заявка X:STORE55",
       `Тип: ${dto.type}`,
       `Телефон: ${dto.phone}`,
       dto.customerName ? `Имя: ${dto.customerName}` : "",
