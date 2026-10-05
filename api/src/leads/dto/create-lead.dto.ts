@@ -1,10 +1,13 @@
-import { IsIn, IsOptional, IsString } from "class-validator";
+import { IsIn, IsOptional, IsString, Matches } from "class-validator";
 
 export class CreateLeadDto {
   @IsIn(["tradein", "assessment", "order"])
   type!: "tradein" | "assessment" | "order";
 
   @IsString()
+  @Matches(/^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/, {
+    message: "Укажите полный номер телефона: +7 (999) 123-45-67"
+  })
   phone!: string;
 
   @IsOptional()

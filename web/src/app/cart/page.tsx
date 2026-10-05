@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { createLead } from "@/lib/api";
 import { CART_STORAGE_KEY } from "@/lib/brand";
+import { isCompleteRuPhone } from "@/lib/phone";
 import { toRub } from "@/lib/store";
 
 type CartItem = {
@@ -123,6 +124,10 @@ export default function CartPage() {
     }
     if (!customerName.trim() || !phone.trim()) {
       setFormError("Заполните имя и телефон.");
+      return;
+    }
+    if (!isCompleteRuPhone(phone)) {
+      setFormError("Укажите полный номер телефона: +7 (999) 123-45-67");
       return;
     }
     if (deliveryMethod === "delivery" && !deliveryAddress.trim()) {

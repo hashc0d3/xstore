@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { createLead, fetchBuybackConfig } from "@/lib/api";
+import { isCompleteRuPhone } from "@/lib/phone";
 import type { BuybackConfig } from "@/lib/store";
 
 function formatPhone(value: string): string {
@@ -73,6 +74,10 @@ export default function AssessmentPage() {
     setNotice(null);
     if (!model || !memory || !simType || !customerName.trim() || !phone.trim()) {
       setNotice({ type: "error", text: "Заполните тип устройства, память, тип SIM, имя и номер." });
+      return;
+    }
+    if (!isCompleteRuPhone(phone)) {
+      setNotice({ type: "error", text: "Укажите полный номер телефона: +7 (999) 123-45-67" });
       return;
     }
     try {
