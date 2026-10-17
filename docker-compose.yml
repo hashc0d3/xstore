@@ -18,6 +18,8 @@ services:
       CORS_ORIGIN: "${CORS_ORIGIN:-https://www.xstore55.ru,https://xstore55.ru,http://127.0.0.1:8080,http://localhost:8080}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+      TELEGRAM_API_BASE: "${TELEGRAM_API_BASE:-https://api.telegram.org}"
+      LEADS_OUTBOX_SECRET: "${LEADS_OUTBOX_SECRET:-}"
       AUTO_SEED_CATALOG: "${AUTO_SEED_CATALOG:-1}"
       CATALOG_ROOT: "/app/catalog"
       UPLOAD_DIR: "/data/uploads"
